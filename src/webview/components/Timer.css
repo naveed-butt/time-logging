@@ -1,9 +1,7 @@
 .timer-container {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
-  max-width: 600px;
-  margin: 0 auto;
+  gap: 8px;
 }
 
 .timer-card {
@@ -12,14 +10,14 @@
 
 .timer-display {
   position: relative;
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: 8px;
 }
 
 .time {
-  font-size: 64px;
+  font-size: 32px;
   font-weight: 300;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   color: var(--text-primary);
 }
 
@@ -29,48 +27,58 @@
 
 .paused-indicator {
   display: block;
-  font-size: var(--font-size-sm);
+  font-size: 10px;
   color: var(--color-warning);
   font-weight: 600;
-  letter-spacing: 2px;
-  margin-top: var(--spacing-xs);
+  letter-spacing: 1px;
+  margin-top: 2px;
 }
 
 .current-task {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
+  gap: 4px;
   flex-wrap: wrap;
-  padding: var(--spacing-md);
+  padding: 6px;
   background-color: var(--color-primary-light);
   border-radius: var(--border-radius);
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: 8px;
 }
 
 .task-type {
-  padding: 2px 8px;
+  padding: 1px 5px;
   background-color: var(--color-primary);
   color: white;
-  border-radius: 4px;
-  font-size: var(--font-size-xs);
+  border-radius: 3px;
+  font-size: 9px;
   font-weight: 500;
 }
 
 .task-id {
   font-weight: 600;
+  font-size: 11px;
   color: var(--color-primary);
 }
 
 .task-title {
+  font-size: 11px;
   color: var(--text-primary);
 }
 
 /* Work Item Selector */
 .work-item-selector {
   position: relative;
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: 8px;
   text-align: left;
+}
+
+.work-item-selector label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  display: block;
 }
 
 .search-container {
@@ -79,7 +87,7 @@
 
 .search-spinner {
   position: absolute;
-  right: 12px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
 }
@@ -89,7 +97,7 @@
   top: 100%;
   left: 0;
   right: 0;
-  max-height: 300px;
+  max-height: 200px;
   overflow-y: auto;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -103,8 +111,8 @@
 .work-item-option {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  gap: 4px;
+  padding: 4px 6px;
   cursor: pointer;
   transition: background-color 0.15s;
 }
@@ -119,9 +127,9 @@
 
 .item-type {
   flex-shrink: 0;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: var(--font-size-xs);
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 9px;
   font-weight: 500;
   color: white;
   background-color: #666;
@@ -148,13 +156,13 @@
 .item-id {
   flex-shrink: 0;
   font-weight: 600;
-  font-size: var(--font-size-sm);
+  font-size: 10px;
   color: var(--color-primary);
 }
 
 .item-title {
   flex: 1;
-  font-size: var(--font-size-sm);
+  font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -162,83 +170,84 @@
 
 .item-state {
   flex-shrink: 0;
-  font-size: var(--font-size-xs);
+  font-size: 9px;
   color: var(--text-tertiary);
 }
 
 .no-items-message {
-  padding: var(--spacing-md);
+  padding: 8px;
   text-align: center;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: 10px;
   background-color: var(--bg-secondary);
   border-radius: var(--border-radius);
-  margin-top: var(--spacing-sm);
+  margin-top: 4px;
 }
 
 /* Timer Controls */
 .timer-controls {
   display: flex;
   justify-content: center;
-  gap: var(--spacing-md);
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .start-btn {
-  min-width: 200px;
+  min-width: 100px;
 }
 
 .setup-prompt {
-  margin-top: var(--spacing-lg);
-  padding: var(--spacing-md);
+  margin-top: 8px;
+  padding: 6px;
   background-color: var(--bg-secondary);
   border-radius: var(--border-radius);
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: 10px;
 }
 
 /* Manual Entry Form */
 .manual-entry-form {
-  margin-top: var(--spacing-lg);
-  padding: var(--spacing-md);
+  margin-top: 8px;
+  padding: 8px;
   background-color: var(--bg-secondary);
   border-radius: var(--border-radius);
   text-align: left;
 }
 
 .manual-entry-form h4 {
-  margin: 0 0 var(--spacing-md) 0;
-  font-size: var(--font-size-sm);
+  margin: 0 0 6px 0;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .manual-entry-inputs {
   display: flex;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-sm);
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .time-input-group {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 2px;
 }
 
 .time-input {
-  width: 60px;
+  width: 50px;
   text-align: center;
 }
 
 .time-label {
-  font-size: var(--font-size-sm);
+  font-size: 10px;
   color: var(--text-secondary);
 }
 
 .manual-entry-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
+  gap: 4px;
+  margin-top: 6px;
 }
 
 /* Recent Summary */
@@ -248,28 +257,28 @@
 
 .summary-days {
   display: flex;
-  gap: var(--spacing-lg);
+  gap: 8px;
 }
 
 .summary-day {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-md);
+  gap: 2px;
+  padding: 6px;
   background-color: var(--bg-secondary);
   border-radius: var(--border-radius);
   text-align: center;
 }
 
 .day-name {
-  font-size: var(--font-size-sm);
+  font-size: 10px;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
 .day-hours {
-  font-size: var(--font-size-lg);
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-primary);
 }
@@ -281,13 +290,13 @@
 
 .tips-list {
   margin: 0;
-  padding-left: var(--spacing-lg);
+  padding-left: 14px;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: 10px;
 }
 
 .tips-list li {
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 2px;
 }
 
 .tips-list li:last-child {
