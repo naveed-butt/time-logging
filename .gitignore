@@ -4,13 +4,9 @@ node_modules/
 .pnp.js
 
 # Build outputs
+out/
 dist/
-dist-ssr/
-*.local
-
-# Tauri
-src-tauri/target/
-src-tauri/gen/
+*.vsix
 
 # Environment
 .env
@@ -22,8 +18,6 @@ src-tauri/gen/
 npm-debug.log*
 
 # Editor
-.vscode/*
-!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
@@ -34,3 +28,6 @@ Thumbs.db
 
 # Test
 coverage/
+
+# TypeScript
+*.tsbuildinfo

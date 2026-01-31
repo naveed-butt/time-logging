@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { adoService } from "../services/azureDevOps";
-import { db } from "../services/database";
 import type { AdoOrganization } from "../types";
 import "./Settings.css";
 
 export function Settings() {
-	const { state, dispatch } = useApp();
+	const {
+		state,
+		saveOrganization,
+		deleteOrganization,
+		setCurrentOrganization,
+	} = useApp();
 	const { organizations, settings } = state;
 
 	const [editingOrg, setEditingOrg] = useState<Partial<AdoOrganization> | null>(
@@ -24,9 +27,11 @@ export function Settings() {
 			id: crypto.randomUUID(),
 			name: "",
 			url: "https://dev.azure.com/",
-			project: "",
+			projectName: "",
 			patToken: "",
 			isDefault: organizations.length === 0,
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
 		});
 		setConnectionResult(null);
 	}
@@ -37,10 +42,10 @@ export function Settings() {
 	}
 
 	async function handleTestConnection() {
-		if (!editingOrg?.url || !editingOrg?.patToken) {
+		if (!editingOrg?.url || !editingOrg?.patToken || !editingOrg?.projectName) {
 			setConnectionResult({
 				success: false,
-				message: "Please fill in URL and PAT token",
+				message: "Please fill in URL, Project, and PAT token",
 			});
 			return;
 		}
@@ -48,18 +53,61 @@ export function Settings() {
 		setIsTestingConnection(true);
 		setConnectionResult(null);
 
-		const result = await adoService.testConnection(
-			editingOrg as AdoOrganization,
-		);
-		setConnectionResult(result);
+		try {
+			// Test by fetching projects from the API
+			const baseUrl = editingOrg.url.replace(/\/$/, "");
+			const auth = btoa(`:${editingOrg.patToken}`);
+			const response = await fetch(
+				`${baseUrl}/${editingOrg.projectName}/_apis/wit/wiql?api-version=7.1`,
+				{
+					method: "POST",
+					headers: {
+						Authorization: `Basic ${auth}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						query: "SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 0",
+					}),
+				},
+			);
+
+			if (response.ok) {
+				setConnectionResult({
+					success: true,
+					message: "Connection successful!",
+				});
+			} else if (response.status === 401) {
+				setConnectionResult({
+					success: false,
+					message: "Authentication failed. Check your PAT token.",
+				});
+			} else if (response.status === 404) {
+				setConnectionResult({
+					success: false,
+					message:
+						"Project not found. Check your organization URL and project name.",
+				});
+			} else {
+				setConnectionResult({
+					success: false,
+					message: `Connection failed: ${response.statusText}`,
+				});
+			}
+		} catch (error) {
+			setConnectionResult({
+				success: false,
+				message: `Connection error: ${error instanceof Error ? error.message : "Unknown error"}`,
+			});
+		}
+
 		setIsTestingConnection(false);
 	}
 
-	async function handleSaveOrg() {
+	function handleSaveOrg() {
 		if (
 			!editingOrg?.name ||
 			!editingOrg?.url ||
-			!editingOrg?.project ||
+			!editingOrg?.projectName ||
 			!editingOrg?.patToken
 		) {
 			setConnectionResult({
@@ -74,23 +122,19 @@ export function Settings() {
 		const org: AdoOrganization = {
 			id: editingOrg.id || crypto.randomUUID(),
 			name: editingOrg.name,
-			url: editingOrg.url.replace(/\/$/, ""), // Remove trailing slash
-			project: editingOrg.project,
+			url: editingOrg.url.replace(/\/$/, ""),
+			projectName: editingOrg.projectName,
 			patToken: editingOrg.patToken,
 			isDefault: editingOrg.isDefault || organizations.length === 0,
+			createdAt: editingOrg.createdAt || new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
 		};
 
-		await db.saveOrganization(org);
-
-		const existingIndex = organizations.findIndex((o) => o.id === org.id);
-		if (existingIndex >= 0) {
-			dispatch({ type: "UPDATE_ORGANIZATION", payload: org });
-		} else {
-			dispatch({ type: "ADD_ORGANIZATION", payload: org });
-		}
+		// Send to extension via postMessage
+		saveOrganization(org);
 
 		if (org.isDefault) {
-			dispatch({ type: "SET_CURRENT_ORGANIZATION", payload: org });
+			setCurrentOrganization(org.id);
 		}
 
 		setEditingOrg(null);
@@ -98,41 +142,18 @@ export function Settings() {
 		setIsSaving(false);
 	}
 
-	async function handleDeleteOrg(id: string) {
+	function handleDeleteOrg(id: string) {
 		if (
 			confirm(
 				"Delete this organization connection? Time entries will not be deleted.",
 			)
 		) {
-			await db.deleteOrganization(id);
-			dispatch({ type: "DELETE_ORGANIZATION", payload: id });
+			deleteOrganization(id);
 		}
 	}
 
-	async function handleSetDefault(org: AdoOrganization) {
-		// Update all orgs to remove default flag
-		for (const o of organizations) {
-			if (o.id !== org.id && o.isDefault) {
-				const updated = { ...o, isDefault: false };
-				await db.saveOrganization(updated);
-				dispatch({ type: "UPDATE_ORGANIZATION", payload: updated });
-			}
-		}
-
-		// Set this org as default
-		const updated = { ...org, isDefault: true };
-		await db.saveOrganization(updated);
-		dispatch({ type: "UPDATE_ORGANIZATION", payload: updated });
-		dispatch({ type: "SET_CURRENT_ORGANIZATION", payload: updated });
-	}
-
-	async function handleSettingChange(
-		key: keyof typeof settings,
-		value: unknown,
-	) {
-		const newSettings = { ...settings, [key]: value };
-		await db.saveSettings(newSettings);
-		dispatch({ type: "SET_SETTINGS", payload: { [key]: value } });
+	function handleSetDefault(org: AdoOrganization) {
+		setCurrentOrganization(org.id);
 	}
 
 	return (
@@ -170,26 +191,26 @@ export function Settings() {
 										)}
 									</div>
 									<div className="org-details">
-										{org.url} / {org.project}
+										{org.url} / {org.projectName}
 									</div>
 								</div>
 								<div className="org-actions">
 									{!org.isDefault && (
 										<button
-											className="btn btn-secondary"
+											className="btn btn-secondary btn-sm"
 											onClick={() => handleSetDefault(org)}
 										>
 											Set Default
 										</button>
 									)}
 									<button
-										className="btn btn-secondary"
+										className="btn btn-secondary btn-sm"
 										onClick={() => handleEditOrg(org)}
 									>
 										Edit
 									</button>
 									<button
-										className="btn btn-danger"
+										className="btn btn-danger btn-sm"
 										onClick={() => handleDeleteOrg(org.id)}
 									>
 										Delete
@@ -245,9 +266,9 @@ export function Settings() {
 								type="text"
 								className="form-input"
 								placeholder="MyProject"
-								value={editingOrg.project || ""}
+								value={editingOrg.projectName || ""}
 								onChange={(e) =>
-									setEditingOrg({ ...editingOrg, project: e.target.value })
+									setEditingOrg({ ...editingOrg, projectName: e.target.value })
 								}
 							/>
 						</div>
@@ -286,14 +307,7 @@ export function Settings() {
 								onClick={handleTestConnection}
 								disabled={isTestingConnection}
 							>
-								{isTestingConnection ? (
-									<>
-										<span className="spinner"></span>
-										Testing...
-									</>
-								) : (
-									"Test Connection"
-								)}
+								{isTestingConnection ? "Testing..." : "Test Connection"}
 							</button>
 							<div className="form-actions-right">
 								<button
@@ -320,45 +334,7 @@ export function Settings() {
 
 			{/* General Settings Section */}
 			<section className="settings-section">
-				<h3>General</h3>
-
-				<div className="setting-row">
-					<div className="setting-info">
-						<div className="setting-label">Minimize to System Tray</div>
-						<div className="setting-description">
-							Keep the app running in the background when closed
-						</div>
-					</div>
-					<label className="toggle">
-						<input
-							type="checkbox"
-							checked={settings.minimizeToTray}
-							onChange={(e) =>
-								handleSettingChange("minimizeToTray", e.target.checked)
-							}
-						/>
-						<span className="toggle-slider"></span>
-					</label>
-				</div>
-
-				<div className="setting-row">
-					<div className="setting-info">
-						<div className="setting-label">Start with Windows</div>
-						<div className="setting-description">
-							Launch Time Tracker when you log in
-						</div>
-					</div>
-					<label className="toggle">
-						<input
-							type="checkbox"
-							checked={settings.startWithWindows}
-							onChange={(e) =>
-								handleSettingChange("startWithWindows", e.target.checked)
-							}
-						/>
-						<span className="toggle-slider"></span>
-					</label>
-				</div>
+				<h3>Preferences</h3>
 
 				<div className="setting-row">
 					<div className="setting-info">
@@ -369,15 +345,31 @@ export function Settings() {
 					</div>
 					<select
 						className="form-select setting-select"
-						value={settings.timeRoundingMinutes}
-						onChange={(e) =>
-							handleSettingChange("timeRoundingMinutes", Number(e.target.value))
-						}
+						value={settings.timeRounding}
+						disabled
 					>
 						<option value={1}>1 minute</option>
 						<option value={5}>5 minutes</option>
 						<option value={15}>15 minutes</option>
 						<option value={30}>30 minutes</option>
+					</select>
+				</div>
+
+				<div className="setting-row">
+					<div className="setting-info">
+						<div className="setting-label">Default View</div>
+						<div className="setting-description">
+							Tab shown when opening the extension
+						</div>
+					</div>
+					<select
+						className="form-select setting-select"
+						value={settings.defaultView}
+						disabled
+					>
+						<option value="timer">Timer</option>
+						<option value="entries">Time Entries</option>
+						<option value="reports">Reports</option>
 					</select>
 				</div>
 			</section>
@@ -389,7 +381,7 @@ export function Settings() {
 					<p>
 						<strong>Time Tracker for Azure DevOps</strong>
 					</p>
-					<p>Version 1.0.0</p>
+					<p>Version 0.0.1</p>
 					<p className="text-secondary">
 						Track time on your Azure DevOps work items and sync completed hours
 						directly to ADO.

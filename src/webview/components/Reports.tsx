@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useApp } from "../context/AppContext";
-import type { DailySummary } from "../types";
+import type { DailySummary, TimeEntry } from "../types";
 import "./Reports.css";
 
 export function Reports() {
@@ -10,7 +10,7 @@ export function Reports() {
 	const [dateRange, setDateRange] = useState<"week" | "month" | "all">("week");
 
 	// Calculate date filter
-	const filteredEntries = useMemo(() => {
+	const filteredEntries = useMemo((): TimeEntry[] => {
 		const now = new Date();
 		let startDate: Date;
 
@@ -28,7 +28,7 @@ export function Reports() {
 		}
 
 		return timeEntries.filter(
-			(entry) => new Date(entry.startTime) >= startDate,
+			(entry: TimeEntry) => new Date(entry.startTime) >= startDate,
 		);
 	}, [timeEntries, dateRange]);
 
@@ -36,7 +36,7 @@ export function Reports() {
 	const dailySummaries = useMemo((): DailySummary[] => {
 		const byDate: Record<string, DailySummary> = {};
 
-		filteredEntries.forEach((entry) => {
+		filteredEntries.forEach((entry: TimeEntry) => {
 			const date = entry.startTime.split("T")[0];
 
 			if (!byDate[date]) {
@@ -61,6 +61,7 @@ export function Reports() {
 			if (!byDate[date].byWorkItem[entry.workItemId]) {
 				byDate[date].byWorkItem[entry.workItemId] = {
 					title: entry.workItemTitle,
+					type: entry.workItemType,
 					minutes: 0,
 				};
 			}
@@ -73,7 +74,7 @@ export function Reports() {
 
 	// Calculate totals
 	const totalMinutes = filteredEntries.reduce(
-		(sum, e) => sum + e.durationMinutes,
+		(sum: number, e: TimeEntry) => sum + e.durationMinutes,
 		0,
 	);
 	const totalHours = (totalMinutes / 60).toFixed(1);
@@ -104,7 +105,7 @@ export function Reports() {
 	// Group by project for overview
 	const projectTotals = useMemo(() => {
 		const totals: Record<string, number> = {};
-		filteredEntries.forEach((entry) => {
+		filteredEntries.forEach((entry: TimeEntry) => {
 			totals[entry.projectName] =
 				(totals[entry.projectName] || 0) + entry.durationMinutes;
 		});
@@ -116,7 +117,7 @@ export function Reports() {
 	// Top work items
 	const topWorkItems = useMemo(() => {
 		const totals: Record<number, { title: string; minutes: number }> = {};
-		filteredEntries.forEach((entry) => {
+		filteredEntries.forEach((entry: TimeEntry) => {
 			if (!totals[entry.workItemId]) {
 				totals[entry.workItemId] = { title: entry.workItemTitle, minutes: 0 };
 			}

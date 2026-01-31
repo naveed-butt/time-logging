@@ -1,31 +1,96 @@
 {
-	"name": "time-tracker",
+	"name": "time-tracker-ado",
+	"displayName": "Time Tracker for Azure DevOps",
+	"description": "Track time spent on Azure DevOps work items directly from VS Code",
 	"version": "1.0.0",
-	"description": "Windows time tracking utility with Azure DevOps integration",
-	"type": "module",
-	"scripts": {
-		"dev": "vite",
-		"build": "tsc && vite build",
-		"preview": "vite preview",
-		"tauri": "tauri"
+	"publisher": "naveed-butt",
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.85.0"
 	},
+	"categories": [
+		"Other"
+	],
 	"keywords": [
 		"time-tracker",
 		"azure-devops",
-		"productivity"
+		"productivity",
+		"ado",
+		"time-logging"
 	],
-	"author": "",
-	"license": "MIT",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "timeTracker.startTimer",
+				"title": "Start Timer",
+				"category": "Time Tracker"
+			},
+			{
+				"command": "timeTracker.stopTimer",
+				"title": "Stop Timer",
+				"category": "Time Tracker"
+			},
+			{
+				"command": "timeTracker.pauseTimer",
+				"title": "Pause Timer",
+				"category": "Time Tracker"
+			},
+			{
+				"command": "timeTracker.resumeTimer",
+				"title": "Resume Timer",
+				"category": "Time Tracker"
+			},
+			{
+				"command": "timeTracker.syncToAdo",
+				"title": "Sync Time Entries to Azure DevOps",
+				"category": "Time Tracker"
+			}
+		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "timeTracker",
+					"title": "Time Tracker",
+					"icon": "media/clock.svg"
+				}
+			]
+		},
+		"views": {
+			"timeTracker": [
+				{
+					"type": "webview",
+					"id": "timeTracker.mainView",
+					"name": "Time Tracker"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "npm run compile:extension && npm run compile:webview",
+		"compile:extension": "tsc -p tsconfig.extension.json",
+		"compile:webview": "vite build",
+		"build": "npm run compile",
+		"watch:extension": "tsc -watch -p tsconfig.extension.json",
+		"watch:webview": "vite build --watch",
+		"dev": "concurrently \"npm run watch:extension\" \"npm run watch:webview\"",
+		"lint": "eslint src --ext ts,tsx"
+	},
 	"dependencies": {
-		"@tauri-apps/api": "^2.9.1",
 		"react": "^19.2.4",
 		"react-dom": "^19.2.4"
 	},
 	"devDependencies": {
-		"@tauri-apps/cli": "^2.9.6",
+		"@types/node": "^20.19.30",
 		"@types/react": "^19.2.10",
 		"@types/react-dom": "^19.2.3",
+		"@types/vscode": "^1.108.1",
 		"@vitejs/plugin-react": "^5.1.2",
+		"concurrently": "^8.2.2",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.1"
 	}

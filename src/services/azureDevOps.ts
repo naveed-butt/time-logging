@@ -1,81 +1,54 @@
+import type { AdoOrganization, WorkItem } from "./types";
+
+interface AdoWorkItemQueryResult {
+	workItems: Array<{ id: number; url: string }>;
+}
+
+interface AdoWorkItemResponse {
+	id: number;
+	fields: {
+		"System.Title": string;
+		"System.WorkItemType": string;
+		"System.State": string;
+		"System.AssignedTo"?: { displayName: string };
+		"Microsoft.VSTS.Scheduling.CompletedWork"?: number;
+	};
+	_links: {
+		html: { href: string };
+	};
+}
+
 /**
- * Azure DevOps REST API Service
- * Handles all interactions with ADO for work items and time tracking
+ * Azure DevOps REST API service.
+ * Handles work item queries, search, and updates.
  */
-
-import type {
-	AdoOrganization,
-	WorkItem,
-	AdoWorkItemQueryResult,
-	AdoWorkItemDetails,
-} from "../types";
-
-class AzureDevOpsService {
-	private getHeaders(patToken: string): HeadersInit {
-		const encodedPat = btoa(`:${patToken}`);
+export class AzureDevOpsService {
+	private getHeaders(patToken: string): Record<string, string> {
+		const auth = Buffer.from(`:${patToken}`).toString("base64");
 		return {
+			Authorization: `Basic ${auth}`,
 			"Content-Type": "application/json",
-			Authorization: `Basic ${encodedPat}`,
 		};
 	}
 
 	private getApiUrl(org: AdoOrganization, path: string): string {
-		// Ensure URL doesn't have trailing slash
-		const baseUrl = org.url.replace(/\/$/, "");
-		return `${baseUrl}/${org.project}/_apis/${path}`;
+		const baseUrl = org.url.endsWith("/") ? org.url.slice(0, -1) : org.url;
+		return `${baseUrl}/${org.projectName}/_apis/${path}`;
 	}
 
 	/**
-	 * Test connection to Azure DevOps
-	 */
-	async testConnection(
-		org: AdoOrganization,
-	): Promise<{ success: boolean; message: string }> {
-		try {
-			const url = `${org.url.replace(/\/$/, "")}/_apis/projects?api-version=7.1`;
-			const response = await fetch(url, {
-				headers: this.getHeaders(org.patToken),
-			});
-
-			if (response.ok) {
-				return { success: true, message: "Connection successful!" };
-			} else if (response.status === 401) {
-				return {
-					success: false,
-					message: "Authentication failed. Check your PAT token.",
-				};
-			} else if (response.status === 404) {
-				return {
-					success: false,
-					message: "Organization not found. Check the URL.",
-				};
-			} else {
-				return {
-					success: false,
-					message: `Connection failed: ${response.statusText}`,
-				};
-			}
-		} catch (error) {
-			return {
-				success: false,
-				message: `Connection error: ${error instanceof Error ? error.message : "Unknown error"}`,
-			};
-		}
-	}
-
-	/**
-	 * Fetch work items assigned to current user
+	 * Get work items assigned to the current user
 	 */
 	async getMyWorkItems(org: AdoOrganization): Promise<WorkItem[]> {
 		const wiqlQuery = {
 			query: `
-        SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State]
-        FROM WorkItems
-        WHERE [System.AssignedTo] = @Me
-          AND [System.State] NOT IN ('Closed', 'Resolved', 'Done', 'Removed')
-          AND [System.WorkItemType] IN ('Task', 'Bug', 'User Story', 'Feature', 'Product Backlog Item')
-        ORDER BY [System.ChangedDate] DESC
-      `,
+				SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State]
+				FROM WorkItems
+				WHERE [System.AssignedTo] = @Me
+				  AND [System.State] NOT IN ('Closed', 'Resolved', 'Done', 'Removed')
+				  AND [System.WorkItemType] IN ('Task', 'Bug', 'User Story', 'Feature', 'Product Backlog Item')
+				ORDER BY [System.ChangedDate] DESC
+			`,
 		};
 
 		const url = this.getApiUrl(org, "wit/wiql?api-version=7.1");
@@ -87,28 +60,29 @@ class AzureDevOpsService {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Failed to query work items: ${response.statusText}`);
+			throw new Error(`Failed to fetch work items: ${response.statusText}`);
 		}
 
-		const result: AdoWorkItemQueryResult = await response.json();
+		const result = (await response.json()) as AdoWorkItemQueryResult;
 
 		if (!result.workItems || result.workItems.length === 0) {
 			return [];
 		}
 
-		// Get details for each work item (batch up to 200)
-		const ids = result.workItems.slice(0, 200).map((wi) => wi.id);
+		const ids = result.workItems.slice(0, 50).map((wi) => wi.id);
 		return this.getWorkItemDetails(org, ids);
 	}
 
 	/**
-	 * Get detailed information for specific work items
+	 * Get details for specific work item IDs
 	 */
 	async getWorkItemDetails(
 		org: AdoOrganization,
 		ids: number[],
 	): Promise<WorkItem[]> {
-		if (ids.length === 0) return [];
+		if (ids.length === 0) {
+			return [];
+		}
 
 		const fields = [
 			"System.Id",
@@ -116,31 +90,45 @@ class AzureDevOpsService {
 			"System.WorkItemType",
 			"System.State",
 			"System.AssignedTo",
-			"System.AreaPath",
-			"System.IterationPath",
-			"Microsoft.VSTS.Scheduling.CompletedWork",
-			"Microsoft.VSTS.Scheduling.RemainingWork",
-			"Microsoft.VSTS.Scheduling.OriginalEstimate",
 		].join(",");
 
-		const url = this.getApiUrl(
-			org,
-			`wit/workitems?ids=${ids.join(",")}&fields=${fields}&api-version=7.1`,
-		);
+		const baseUrl = org.url.endsWith("/") ? org.url.slice(0, -1) : org.url;
+		const url = `${baseUrl}/_apis/wit/workitems?ids=${ids.join(",")}&fields=${fields}&api-version=7.1`;
 
 		const response = await fetch(url, {
+			method: "GET",
 			headers: this.getHeaders(org.patToken),
 		});
 
 		if (!response.ok) {
 			throw new Error(
-				`Failed to get work item details: ${response.statusText}`,
+				`Failed to fetch work item details: ${response.statusText}`,
 			);
 		}
 
-		const result: { value: AdoWorkItemDetails[] } = await response.json();
+		const result = (await response.json()) as { value: AdoWorkItemResponse[] };
 
-		return result.value.map((wi) => this.mapWorkItem(wi, org));
+		return result.value.map((wi) => ({
+			id: wi.id,
+			title: wi.fields["System.Title"],
+			type: wi.fields["System.WorkItemType"],
+			state: wi.fields["System.State"],
+			projectName: org.projectName,
+			organizationId: org.id,
+			assignedTo: wi.fields["System.AssignedTo"]?.displayName,
+			url: wi._links.html.href,
+		}));
+	}
+
+	/**
+	 * Get a single work item by ID
+	 */
+	async getWorkItem(
+		org: AdoOrganization,
+		id: number,
+	): Promise<WorkItem | null> {
+		const items = await this.getWorkItemDetails(org, [id]);
+		return items[0] || null;
 	}
 
 	/**
@@ -167,13 +155,13 @@ class AzureDevOpsService {
 		// Text-based search
 		const wiqlQuery = {
 			query: `
-        SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State]
-        FROM WorkItems
-        WHERE [System.Title] CONTAINS '${searchText.replace(/'/g, "''")}'
-          AND [System.State] NOT IN ('Closed', 'Resolved', 'Done', 'Removed')
-          AND [System.WorkItemType] IN ('Task', 'Bug', 'User Story', 'Feature', 'Product Backlog Item')
-        ORDER BY [System.ChangedDate] DESC
-      `,
+				SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State]
+				FROM WorkItems
+				WHERE [System.Title] CONTAINS '${searchText.replace(/'/g, "''")}'
+				  AND [System.State] NOT IN ('Closed', 'Resolved', 'Done', 'Removed')
+				  AND [System.WorkItemType] IN ('Task', 'Bug', 'User Story', 'Feature', 'Product Backlog Item')
+				ORDER BY [System.ChangedDate] DESC
+			`,
 		};
 
 		const url = this.getApiUrl(org, "wit/wiql?api-version=7.1");
@@ -188,7 +176,7 @@ class AzureDevOpsService {
 			throw new Error(`Failed to search work items: ${response.statusText}`);
 		}
 
-		const result: AdoWorkItemQueryResult = await response.json();
+		const result = (await response.json()) as AdoWorkItemQueryResult;
 
 		if (!result.workItems || result.workItems.length === 0) {
 			return [];
@@ -199,97 +187,55 @@ class AzureDevOpsService {
 	}
 
 	/**
-	 * Get a single work item by ID
-	 */
-	async getWorkItem(
-		org: AdoOrganization,
-		id: number,
-	): Promise<WorkItem | null> {
-		const items = await this.getWorkItemDetails(org, [id]);
-		return items[0] || null;
-	}
-
-	/**
-	 * Update completed work on a work item
-	 * Adds the specified hours to the existing CompletedWork value
+	 * Update the Completed Work field on a work item
 	 */
 	async updateCompletedWork(
 		org: AdoOrganization,
 		workItemId: number,
-		additionalHours: number,
-	): Promise<{ success: boolean; newTotal: number; error?: string }> {
-		try {
-			// First get current completed work
-			const currentItem = await this.getWorkItem(org, workItemId);
-			if (!currentItem) {
-				return { success: false, newTotal: 0, error: "Work item not found" };
-			}
+		minutesToAdd: number,
+	): Promise<void> {
+		// First get current completed work
+		const baseUrl = org.url.endsWith("/") ? org.url.slice(0, -1) : org.url;
+		const getUrl = `${baseUrl}/_apis/wit/workitems/${workItemId}?fields=Microsoft.VSTS.Scheduling.CompletedWork&api-version=7.1`;
 
-			const currentCompleted = currentItem.completedWork || 0;
-			const newTotal = currentCompleted + additionalHours;
+		const getResponse = await fetch(getUrl, {
+			method: "GET",
+			headers: this.getHeaders(org.patToken),
+		});
 
-			// Update the work item
-			const patchDocument = [
-				{
-					op: "add",
-					path: "/fields/Microsoft.VSTS.Scheduling.CompletedWork",
-					value: newTotal,
-				},
-			];
+		if (!getResponse.ok) {
+			throw new Error(`Failed to get work item: ${getResponse.statusText}`);
+		}
 
-			const url = this.getApiUrl(
-				org,
-				`wit/workitems/${workItemId}?api-version=7.1`,
+		const workItem = (await getResponse.json()) as AdoWorkItemResponse;
+		const currentHours =
+			workItem.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0;
+		const hoursToAdd = minutesToAdd / 60;
+		const newHours = currentHours + hoursToAdd;
+
+		// Update the field
+		const patchUrl = `${baseUrl}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
+		const patchBody = [
+			{
+				op: "add",
+				path: "/fields/Microsoft.VSTS.Scheduling.CompletedWork",
+				value: newHours,
+			},
+		];
+
+		const patchResponse = await fetch(patchUrl, {
+			method: "PATCH",
+			headers: {
+				...this.getHeaders(org.patToken),
+				"Content-Type": "application/json-patch+json",
+			},
+			body: JSON.stringify(patchBody),
+		});
+
+		if (!patchResponse.ok) {
+			throw new Error(
+				`Failed to update work item: ${patchResponse.statusText}`,
 			);
-
-			const response = await fetch(url, {
-				method: "PATCH",
-				headers: {
-					...this.getHeaders(org.patToken),
-					"Content-Type": "application/json-patch+json",
-				},
-				body: JSON.stringify(patchDocument),
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				return {
-					success: false,
-					newTotal: currentCompleted,
-					error: `Failed to update: ${errorText}`,
-				};
-			}
-
-			return { success: true, newTotal };
-		} catch (error) {
-			return {
-				success: false,
-				newTotal: 0,
-				error: error instanceof Error ? error.message : "Unknown error",
-			};
 		}
 	}
-
-	/**
-	 * Map ADO API response to our WorkItem type
-	 */
-	private mapWorkItem(wi: AdoWorkItemDetails, org: AdoOrganization): WorkItem {
-		return {
-			id: wi.id,
-			title: wi.fields["System.Title"],
-			type: wi.fields["System.WorkItemType"],
-			state: wi.fields["System.State"],
-			assignedTo: wi.fields["System.AssignedTo"]?.displayName,
-			projectName: org.project,
-			organizationId: org.id,
-			completedWork: wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"],
-			remainingWork: wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"],
-			originalEstimate: wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"],
-			areaPath: wi.fields["System.AreaPath"],
-			iterationPath: wi.fields["System.IterationPath"],
-			url: wi._links?.html?.href || wi.url,
-		};
-	}
 }
-
-export const adoService = new AzureDevOpsService();

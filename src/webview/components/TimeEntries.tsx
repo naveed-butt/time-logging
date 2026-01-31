@@ -1,24 +1,18 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { adoService } from "../services/azureDevOps";
-import { db } from "../services/database";
-import type { TimeEntry, SyncLog } from "../types";
+import type { TimeEntry } from "../types";
 import "./TimeEntries.css";
 
 export function TimeEntries() {
-	const { state, dispatch } = useApp();
-	const { timeEntries, organizations } = state;
+	const { state, deleteTimeEntry, syncEntry, syncAll } = useApp();
+	const { timeEntries } = state;
 
-	const [isSyncing, setIsSyncing] = useState(false);
-	const [syncResults, setSyncResults] = useState<{
-		success: number;
-		failed: number;
-	} | null>(null);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [isSyncing, setIsSyncing] = useState(false);
 
 	// Group entries by date
 	const entriesByDate = timeEntries.reduce(
-		(acc, entry) => {
+		(acc: Record<string, TimeEntry[]>, entry: TimeEntry) => {
 			const date = entry.startTime.split("T")[0];
 			if (!acc[date]) {
 				acc[date] = [];
@@ -30,7 +24,7 @@ export function TimeEntries() {
 	);
 
 	// Get unsynced entries
-	const unsyncedEntries = timeEntries.filter((e) => !e.syncedToAdo);
+	const unsyncedEntries = timeEntries.filter((e: TimeEntry) => !e.syncedToAdo);
 
 	function formatDate(dateStr: string): string {
 		const date = new Date(dateStr);
@@ -67,7 +61,7 @@ export function TimeEntries() {
 	}
 
 	function getDayTotal(entries: TimeEntry[]): number {
-		return entries.reduce((sum, e) => sum + e.durationMinutes, 0);
+		return entries.reduce((sum: number, e: TimeEntry) => sum + e.durationMinutes, 0);
 	}
 
 	function toggleSelection(id: string) {
@@ -81,7 +75,7 @@ export function TimeEntries() {
 	}
 
 	function selectAllUnsynced() {
-		setSelectedIds(new Set(unsyncedEntries.map((e) => e.id)));
+		setSelectedIds(new Set(unsyncedEntries.map((e: TimeEntry) => e.id)));
 	}
 
 	function clearSelection() {
@@ -89,110 +83,28 @@ export function TimeEntries() {
 	}
 
 	async function handleSync() {
-		const entriesToSync = timeEntries.filter(
-			(e) => selectedIds.has(e.id) && !e.syncedToAdo,
-		);
-
-		if (entriesToSync.length === 0) {
-			return;
-		}
+		if (selectedIds.size === 0) return;
 
 		setIsSyncing(true);
-		setSyncResults(null);
 
-		let success = 0;
-		let failed = 0;
-
-		// Group entries by work item and organization
-		const groupedByWorkItem = entriesToSync.reduce(
-			(acc, entry) => {
-				const key = `${entry.organizationId}-${entry.workItemId}`;
-				if (!acc[key]) {
-					acc[key] = {
-						organizationId: entry.organizationId,
-						workItemId: entry.workItemId,
-						workItemTitle: entry.workItemTitle,
-						totalMinutes: 0,
-						entryIds: [],
-					};
-				}
-				acc[key].totalMinutes += entry.durationMinutes;
-				acc[key].entryIds.push(entry.id);
-				return acc;
-			},
-			{} as Record<
-				string,
-				{
-					organizationId: string;
-					workItemId: number;
-					workItemTitle: string;
-					totalMinutes: number;
-					entryIds: string[];
-				}
-			>,
-		);
-
-		// Sync each work item
-		for (const group of Object.values(groupedByWorkItem)) {
-			const org = organizations.find((o) => o.id === group.organizationId);
-			if (!org) {
-				failed++;
-				continue;
-			}
-
-			const hoursToSync = group.totalMinutes / 60;
-			const result = await adoService.updateCompletedWork(
-				org,
-				group.workItemId,
-				hoursToSync,
-			);
-
-			const syncLog: SyncLog = {
-				id: crypto.randomUUID(),
-				workItemId: group.workItemId,
-				workItemTitle: group.workItemTitle,
-				organizationId: org.id,
-				hoursSynced: hoursToSync,
-				syncedAt: new Date().toISOString(),
-				status: result.success ? "success" : "failed",
-				errorMessage: result.error,
-			};
-
-			await db.addSyncLog(syncLog);
-
-			if (result.success) {
-				await db.markEntriesSynced(group.entryIds);
-
-				// Update state
-				group.entryIds.forEach((id) => {
-					const entry = timeEntries.find((e) => e.id === id);
-					if (entry) {
-						dispatch({
-							type: "UPDATE_TIME_ENTRY",
-							payload: {
-								...entry,
-								syncedToAdo: true,
-								syncedAt: new Date().toISOString(),
-							},
-						});
-					}
-				});
-
-				success++;
-			} else {
-				failed++;
-			}
+		// Sync selected entries
+		for (const id of selectedIds) {
+			syncEntry(id);
 		}
 
-		setSyncResults({ success, failed });
 		setSelectedIds(new Set());
 		setIsSyncing(false);
 	}
 
-	async function handleDelete(id: string) {
+	async function handleSyncAll() {
+		setIsSyncing(true);
+		syncAll();
+		setIsSyncing(false);
+	}
+
+	function handleDelete(id: string) {
 		if (confirm("Delete this time entry?")) {
-			await db.deleteTimeEntry(id);
-			dispatch({ type: "DELETE_TIME_ENTRY", payload: id });
+			deleteTimeEntry(id);
 		}
 	}
 
@@ -221,7 +133,7 @@ export function TimeEntries() {
 								{unsyncedEntries.length} unsynced
 							</span>
 							<button
-								className="btn btn-secondary"
+								className="btn btn-secondary btn-sm"
 								onClick={
 									selectedIds.size > 0 ? clearSelection : selectAllUnsynced
 								}
@@ -231,41 +143,23 @@ export function TimeEntries() {
 									: "Select All Unsynced"}
 							</button>
 							<button
-								className="btn btn-primary"
+								className="btn btn-primary btn-sm"
 								onClick={handleSync}
 								disabled={selectedIds.size === 0 || isSyncing}
 							>
-								{isSyncing ? (
-									<>
-										<span className="spinner"></span>
-										Syncing...
-									</>
-								) : (
-									`Sync to ADO (${selectedIds.size})`
-								)}
+								{isSyncing ? "Syncing..." : `Sync Selected (${selectedIds.size})`}
+							</button>
+							<button
+								className="btn btn-primary btn-sm"
+								onClick={handleSyncAll}
+								disabled={isSyncing}
+							>
+								Sync All
 							</button>
 						</>
 					)}
 				</div>
 			</div>
-
-			{syncResults && (
-				<div
-					className={`sync-result ${syncResults.failed > 0 ? "has-errors" : "success"}`}
-				>
-					{syncResults.failed === 0 ? (
-						<span>
-							✓ Successfully synced {syncResults.success} work item(s) to Azure
-							DevOps
-						</span>
-					) : (
-						<span>
-							Synced {syncResults.success} work item(s), {syncResults.failed}{" "}
-							failed. Check the sync log for details.
-						</span>
-					)}
-				</div>
-			)}
 
 			<div className="entries-list">
 				{Object.entries(entriesByDate)
@@ -275,11 +169,11 @@ export function TimeEntries() {
 							<div className="day-header">
 								<span className="day-label">{formatDate(date)}</span>
 								<span className="day-total">
-									{formatDuration(getDayTotal(entries))}
+									{formatDuration(getDayTotal(entries as TimeEntry[]))}
 								</span>
 							</div>
 							<div className="day-entries">
-								{entries.map((entry) => (
+								{(entries as TimeEntry[]).map((entry: TimeEntry) => (
 									<div
 										key={entry.id}
 										className={`entry-row ${selectedIds.has(entry.id) ? "selected" : ""}`}

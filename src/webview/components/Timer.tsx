@@ -1,21 +1,25 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useApp } from "../context/AppContext";
-import { adoService } from "../services/azureDevOps";
-import { db } from "../services/database";
-import type { WorkItem, TimeEntry } from "../types";
+import type { WorkItem } from "../types";
 import "./Timer.css";
 
 export function Timer() {
-	const { state, dispatch, startTimer, pauseTimer, resumeTimer, stopTimer } =
-		useApp();
+	const {
+		state,
+		startTimer,
+		pauseTimer,
+		resumeTimer,
+		stopTimer,
+		searchWorkItems,
+		addManualEntry,
+	} = useApp();
 	const { timer, currentOrganization, workItems } = state;
 
-	const [localWorkItems, setLocalWorkItems] = useState<WorkItem[]>(workItems);
 	const [selectedWorkItem, setSelectedWorkItem] = useState<WorkItem | null>(
 		null,
 	);
 	const [searchText, setSearchText] = useState("");
-	const [isLoading, setIsLoading] = useState(false);
+	const [isSearching, setIsSearching] = useState(false);
 	const [showDropdown, setShowDropdown] = useState(false);
 
 	// Manual entry state
@@ -24,59 +28,18 @@ export function Timer() {
 	const [manualMinutes, setManualMinutes] = useState("");
 	const [manualDescription, setManualDescription] = useState("");
 
-	// Load work items when organization changes
-	useEffect(() => {
-		if (currentOrganization) {
-			loadWorkItems();
-		}
-	}, [currentOrganization?.id]);
-
-	async function loadWorkItems() {
-		if (!currentOrganization) return;
-
-		setIsLoading(true);
-		try {
-			const items = await adoService.getMyWorkItems(currentOrganization);
-			setLocalWorkItems(items);
-		} catch (error) {
-			console.error("Failed to load work items:", error);
-		} finally {
-			setIsLoading(false);
-		}
-	}
-
 	// Search work items with debounce
-	const searchWorkItems = useCallback(
-		async (text: string) => {
-			if (!currentOrganization || text.length < 2) {
-				if (text.length === 0) {
-					loadWorkItems();
-				}
-				return;
-			}
-
-			setIsLoading(true);
-			try {
-				const items = await adoService.searchWorkItems(
-					currentOrganization,
-					text,
-				);
-				setLocalWorkItems(items);
-			} catch (error) {
-				console.error("Failed to search work items:", error);
-			} finally {
-				setIsLoading(false);
-			}
-		},
-		[currentOrganization],
-	);
-
 	useEffect(() => {
+		if (searchText.length < 2) {
+			return;
+		}
+
+		setIsSearching(true);
 		const timeout = setTimeout(() => {
-			if (searchText) {
-				searchWorkItems(searchText);
-			}
+			searchWorkItems(searchText);
+			setIsSearching(false);
 		}, 300);
+
 		return () => clearTimeout(timeout);
 	}, [searchText, searchWorkItems]);
 
@@ -100,7 +63,7 @@ export function Timer() {
 	}
 
 	async function handleStop() {
-		await stopTimer();
+		stopTimer();
 		setSelectedWorkItem(null);
 	}
 
@@ -111,7 +74,7 @@ export function Timer() {
 	}
 
 	// Manual time entry handler
-	async function handleManualEntry() {
+	function handleManualEntry() {
 		if (!selectedWorkItem || !currentOrganization) return;
 
 		const hours = parseInt(manualHours) || 0;
@@ -120,26 +83,20 @@ export function Timer() {
 
 		if (totalMinutes <= 0) return;
 
-		const now = new Date();
-		const entry: TimeEntry = {
-			id: crypto.randomUUID(),
+		const now = new Date().toISOString();
+		addManualEntry({
 			workItemId: selectedWorkItem.id,
 			workItemTitle: selectedWorkItem.title,
 			workItemType: selectedWorkItem.type,
 			projectName: selectedWorkItem.projectName,
 			organizationId: selectedWorkItem.organizationId,
 			organizationName: currentOrganization.name,
-			startTime: now.toISOString(),
-			endTime: now.toISOString(),
+			startTime: now,
+			endTime: now,
 			durationMinutes: totalMinutes,
 			description: manualDescription || undefined,
 			syncedToAdo: false,
-			createdAt: now.toISOString(),
-			updatedAt: now.toISOString(),
-		};
-
-		await db.addTimeEntry(entry);
-		dispatch({ type: "ADD_TIME_ENTRY", payload: entry });
+		});
 
 		// Reset form
 		setManualHours("");
@@ -223,12 +180,12 @@ export function Timer() {
 								onFocus={() => setShowDropdown(true)}
 								disabled={hasNoOrganization}
 							/>
-							{isLoading && <span className="search-spinner spinner"></span>}
+							{isSearching && <span className="search-spinner spinner"></span>}
 						</div>
 
-						{showDropdown && localWorkItems.length > 0 && (
+						{showDropdown && workItems.length > 0 && (
 							<ul className="work-items-dropdown">
-								{localWorkItems.map((item) => (
+								{workItems.map((item) => (
 									<li
 										key={item.id}
 										className={`work-item-option ${selectedWorkItem?.id === item.id ? "selected" : ""}`}
@@ -248,8 +205,8 @@ export function Timer() {
 						)}
 
 						{showDropdown &&
-							!isLoading &&
-							localWorkItems.length === 0 &&
+							!isSearching &&
+							workItems.length === 0 &&
 							currentOrganization && (
 								<div className="no-items-message">
 									{searchText
