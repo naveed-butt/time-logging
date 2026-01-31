@@ -1,0 +1,59 @@
+{
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"productName": "Time Tracker",
+	"version": "1.0.0",
+	"identifier": "com.timetracker.ado",
+	"build": {
+		"frontendDist": "../dist",
+		"devUrl": "http://localhost:1420",
+		"beforeDevCommand": "npm run dev",
+		"beforeBuildCommand": "npm run build"
+	},
+	"app": {
+		"windows": [
+			{
+				"label": "main",
+				"title": "Time Tracker",
+				"width": 900,
+				"height": 650,
+				"minWidth": 700,
+				"minHeight": 500,
+				"resizable": true,
+				"fullscreen": false,
+				"center": true,
+				"visible": true,
+				"decorations": true
+			}
+		],
+		"trayIcon": {
+			"id": "main-tray",
+			"iconPath": "icons/icon.ico",
+			"iconAsTemplate": false,
+			"menuOnLeftClick": false,
+			"title": "Time Tracker"
+		},
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["nsis", "msi"],
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"windows": {
+			"nsis": {
+				"installMode": "currentUser",
+				"installerIcon": "icons/icon.ico",
+				"displayLanguageSelector": false
+			}
+		},
+		"shortDescription": "Time Tracker for Azure DevOps",
+		"longDescription": "Track time on Azure DevOps work items and sync completed hours"
+	}
+}
