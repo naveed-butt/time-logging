@@ -1,0 +1,28 @@
+# Source files
+src/**
+*.ts
+*.tsx
+
+# Config files
+.vscode/**
+.git/**
+.gitignore
+tsconfig.json
+tsconfig.extension.json
+vite.config.ts
+.eslintrc*
+
+# Development
+node_modules/**
+*.map
+*.vsix
+
+# Web dev artifacts
+index.html
+public/**
+
+# Misc
+*.md
+!README.md
+.DS_Store
+Thumbs.db
